@@ -26,7 +26,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -42,6 +43,12 @@ input {
   justify-content: space-between;
   gap: 16px;
   padding: 8px 2px 16px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 h1,
@@ -82,7 +89,7 @@ h2 {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   background: #dfe8e5;
   padding: 6px;
@@ -164,7 +171,19 @@ input {
   outline: none;
 }
 
-input:focus {
+select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 50px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fff;
+  outline: none;
+}
+
+input:focus,
+select:focus {
   border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(23, 92, 98, 0.14);
 }
@@ -200,7 +219,8 @@ input:focus {
 
 .primary-button,
 .secondary-button,
-.icon-button {
+.icon-button,
+.settings-button {
   border: 0;
   border-radius: 8px;
   min-height: 44px;
@@ -230,6 +250,15 @@ input:focus {
   font-size: 28px;
   color: #fff;
   background: var(--accent);
+}
+
+.settings-button {
+  width: 44px;
+  padding: 0;
+  color: var(--brand-strong);
+  background: #fff;
+  border: 1px solid var(--line);
+  font-size: 20px;
 }
 
 .helper {

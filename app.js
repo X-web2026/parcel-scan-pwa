@@ -29,8 +29,6 @@ const els = {
   scanForm: document.querySelector("#scanForm"),
   trackingInput: document.querySelector("#trackingInput"),
   operatorInput: document.querySelector("#operatorInput"),
-  siteInput: document.querySelector("#siteInput"),
-  noteInput: document.querySelector("#noteInput"),
   clearScanButton: document.querySelector("#clearScanButton"),
   todayCount: document.querySelector("#todayCount"),
   totalCount: document.querySelector("#totalCount"),
@@ -70,10 +68,10 @@ async function init() {
 }
 
 function bindEvents() {
-  els.tabs.forEach((tab) => {
-    tab.addEventListener("click", async () => {
-      setActiveView(tab.dataset.view);
-      if (tab.dataset.view === "recordsView") {
+  document.querySelectorAll("[data-view]").forEach((trigger) => {
+    trigger.addEventListener("click", async () => {
+      setActiveView(trigger.dataset.view);
+      if (trigger.dataset.view === "recordsView") {
         await refreshRecords();
       }
     });
@@ -95,7 +93,6 @@ function bindEvents() {
 
   els.clearScanButton.addEventListener("click", () => {
     els.trackingInput.value = "";
-    els.noteInput.value = "";
     els.trackingInput.focus();
   });
 
@@ -138,8 +135,6 @@ async function saveScan() {
   if (state.isSaving) return;
   const trackingNumber = normalizeTrackingNumber(els.trackingInput.value);
   const operator = els.operatorInput.value.trim();
-  const site = els.siteInput.value.trim();
-  const note = els.noteInput.value.trim();
 
   if (!trackingNumber) {
     showToast("请先扫描或输入运单号");
@@ -147,7 +142,13 @@ async function saveScan() {
     return;
   }
 
-  state.profile = { operator, site };
+  if (!operator) {
+    showToast("请先选择扫描人员");
+    els.operatorInput.focus();
+    return;
+  }
+
+  state.profile = { operator };
   localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(state.profile));
 
   const duplicate = state.records.some((record) => normalizeTrackingNumber(record.tracking_number) === trackingNumber);
@@ -155,8 +156,8 @@ async function saveScan() {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
     tracking_number: trackingNumber,
     operator,
-    site,
-    note,
+    site: "",
+    note: "",
     is_duplicate: duplicate,
     created_at: new Date().toISOString(),
   };
@@ -180,7 +181,6 @@ async function saveScan() {
     render();
     showToast(duplicate ? `重复运单号：${trackingNumber}` : `已保存：${trackingNumber}`);
     els.trackingInput.value = "";
-    els.noteInput.value = "";
     els.trackingInput.focus();
   } catch (error) {
     showToast(`保存失败：${error.message}`);
@@ -286,7 +286,7 @@ function renderRecords() {
   const keyword = els.searchInput.value.trim().toLowerCase();
   const date = els.dateInput.value;
   const records = state.records.filter((record) => {
-    const haystack = [record.tracking_number, record.operator, record.site, record.note].join(" ").toLowerCase();
+    const haystack = [record.tracking_number, record.operator].join(" ").toLowerCase();
     const matchesKeyword = !keyword || haystack.includes(keyword);
     const matchesDate = !date || record.created_at?.slice(0, 10) === date;
     return matchesKeyword && matchesDate;
@@ -296,28 +296,24 @@ function renderRecords() {
     .map(
       (record) => `
         <tr>
-          <td><strong>${escapeHtml(record.tracking_number)}</strong></td>
-          <td>${escapeHtml(formatDate(record.created_at))}</td>
-          <td>${escapeHtml(record.operator || "-")}</td>
-          <td>${escapeHtml(record.site || "-")}</td>
-          <td><span class="badge ${record.is_duplicate ? "duplicate" : "ok"}">${record.is_duplicate ? "重复" : "正常"}</span></td>
-          <td>${escapeHtml(record.note || "-")}</td>
-        </tr>
-      `,
+      <td><strong>${escapeHtml(record.tracking_number)}</strong></td>
+      <td>${escapeHtml(formatDate(record.created_at))}</td>
+      <td>${escapeHtml(record.operator || "-")}</td>
+      <td><span class="badge ${record.is_duplicate ? "duplicate" : "ok"}">${record.is_duplicate ? "重复" : "正常"}</span></td>
+    </tr>
+  `,
     )
     .join("");
   els.emptyState.classList.toggle("is-visible", records.length === 0);
 }
 
 function exportCsv() {
-  const header = ["运单号", "时间", "操作人", "站点", "状态", "备注"];
+  const header = ["运单号", "时间", "扫描人员", "状态"];
   const rows = state.records.map((record) => [
     record.tracking_number,
     formatDate(record.created_at),
     record.operator || "",
-    record.site || "",
     record.is_duplicate ? "重复" : "正常",
-    record.note || "",
   ]);
   const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
@@ -380,7 +376,6 @@ async function installPwa() {
 
 function loadProfile() {
   els.operatorInput.value = state.profile.operator || "";
-  els.siteInput.value = state.profile.site || "";
 }
 
 function loadSettingsForm() {
