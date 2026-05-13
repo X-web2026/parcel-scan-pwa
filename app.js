@@ -2,7 +2,11 @@ const STORAGE_KEYS = {
   records: "parcel-scan-records",
   settings: "parcel-scan-settings",
   profile: "parcel-scan-profile",
+  language: "parcel-scan-language",
+  cleanupDate: "parcel-scan-cleanup-date",
 };
+
+const RETENTION_DAYS = 365;
 
 const DEFAULT_SUPABASE_SETTINGS = {
   mode: "supabase",
@@ -13,7 +17,8 @@ const DEFAULT_SUPABASE_SETTINGS = {
 const state = {
   records: [],
   settings: loadJson(STORAGE_KEYS.settings, DEFAULT_SUPABASE_SETTINGS),
-  profile: loadJson(STORAGE_KEYS.profile, { operator: "", site: "" }),
+  profile: loadJson(STORAGE_KEYS.profile, { operator: "" }),
+  language: localStorage.getItem(STORAGE_KEYS.language) || "zh",
   deferredPrompt: null,
   apiAvailable: false,
   scanTimer: null,
@@ -49,6 +54,198 @@ const els = {
   useLocalButton: document.querySelector("#useLocalButton"),
   testConnectionButton: document.querySelector("#testConnectionButton"),
   installButton: document.querySelector("#installButton"),
+  languageSelect: document.querySelector("#languageSelect"),
+  retentionNote: document.querySelector("#retentionNote"),
+  versionText: document.querySelector("#versionText"),
+};
+
+const translations = {
+  zh: {
+    htmlLang: "zh-CN",
+    title: "快递扫描记录",
+    eyebrow: "PDA + Web",
+    appTitle: "快递扫描记录",
+    starting: "启动中",
+    lanSync: "局域网同步",
+    cloudSync: "云端同步",
+    localMode: "本地模式",
+    scanTab: "扫描",
+    recordsTab: "记录",
+    scanEyebrow: "连续扫描",
+    scanTitle: "PDA 扫码录入",
+    installTitle: "安装到桌面",
+    trackingLabel: "运单号",
+    trackingPlaceholder: "请扫描或输入运单号",
+    operatorLabel: "扫描人员",
+    operatorPlaceholder: "请选择扫描人员",
+    saveButton: "保存记录",
+    clearButton: "清空",
+    scanHelper: "PDA 扫码头输入后会自动保存；如果设备发送回车，也会立即保存。",
+    todayCount: "今日扫描",
+    totalCount: "总记录",
+    duplicateCount: "重复提醒",
+    retentionNote: "仅保留最近 365 天数据",
+    noRecords: "暂无扫描记录",
+    latestPrefix: "最近",
+    recordsEyebrow: "Web 后台",
+    recordsTitle: "记录查询",
+    refreshButton: "刷新记录",
+    exportButton: "导出 CSV",
+    searchPlaceholder: "搜索运单号、扫描人员",
+    resetButton: "重置",
+    trackingHeader: "运单号",
+    timeHeader: "时间",
+    operatorHeader: "扫描人员",
+    statusHeader: "状态",
+    emptyState: "暂无记录",
+    ok: "正常",
+    duplicate: "重复",
+    settingsTitle: "连接设置",
+    testConnectionButton: "测试连接",
+    saveSettingsButton: "保存设置",
+    localModeButton: "使用本地模式",
+    settingsHelper: "日常使用不需要进入设置；只有更换 Supabase 项目或临时切回本地模式时才需要修改这里。",
+    version: "版本：Cloud v3",
+    scanFirst: "请先扫描或输入运单号",
+    chooseOperator: "请先选择扫描人员",
+    saved: "已保存",
+    saveFailed: "保存失败",
+    localApiFallback: "局域网同步暂不可用，正在尝试云端同步",
+    cloudFallback: "云端同步暂不可用，已显示本地缓存",
+    refreshed: "已刷新，共 {count} 条记录",
+    settingsMissing: "请填写 Supabase URL 和 Anon Key",
+    settingsSaved: "已保存 Supabase 设置",
+    switchedLocal: "已切换到本地模式",
+    connected: "连接成功",
+    connectFailed: "连接失败",
+    installHint: "浏览器菜单里也可以选择添加到主屏幕",
+    cleanupDone: "已清理 {count} 条超过 365 天的记录",
+    csvHeaders: ["运单号", "时间", "扫描人员", "状态"],
+  },
+  en: {
+    htmlLang: "en",
+    title: "Parcel Scan Records",
+    eyebrow: "PDA + Web",
+    appTitle: "Parcel Scan Records",
+    starting: "Starting",
+    lanSync: "LAN Sync",
+    cloudSync: "Cloud Sync",
+    localMode: "Local Mode",
+    scanTab: "Scan",
+    recordsTab: "Records",
+    scanEyebrow: "Continuous Scan",
+    scanTitle: "PDA Scan Entry",
+    installTitle: "Install app",
+    trackingLabel: "Tracking Number",
+    trackingPlaceholder: "Scan or enter tracking number",
+    operatorLabel: "Scanner",
+    operatorPlaceholder: "Select scanner",
+    saveButton: "Save",
+    clearButton: "Clear",
+    scanHelper: "The PDA scanner saves automatically after input. If it sends Enter, it saves immediately.",
+    todayCount: "Today",
+    totalCount: "Total",
+    duplicateCount: "Duplicates",
+    retentionNote: "Only the latest 365 days are kept",
+    noRecords: "No scan records yet",
+    latestPrefix: "Latest",
+    recordsEyebrow: "Web Console",
+    recordsTitle: "Record Search",
+    refreshButton: "Refresh",
+    exportButton: "Export CSV",
+    searchPlaceholder: "Search tracking number or scanner",
+    resetButton: "Reset",
+    trackingHeader: "Tracking Number",
+    timeHeader: "Time",
+    operatorHeader: "Scanner",
+    statusHeader: "Status",
+    emptyState: "No records",
+    ok: "OK",
+    duplicate: "Duplicate",
+    settingsTitle: "Connection Settings",
+    testConnectionButton: "Test",
+    saveSettingsButton: "Save Settings",
+    localModeButton: "Use Local Mode",
+    settingsHelper: "Daily scanning does not need settings. Change this only when switching Supabase or local mode.",
+    version: "Version: Cloud v3",
+    scanFirst: "Scan or enter a tracking number first",
+    chooseOperator: "Select a scanner first",
+    saved: "Saved",
+    saveFailed: "Save failed",
+    localApiFallback: "LAN sync unavailable. Trying cloud sync.",
+    cloudFallback: "Cloud sync unavailable. Showing local cache.",
+    refreshed: "Refreshed, {count} records",
+    settingsMissing: "Enter Supabase URL and Anon Key",
+    settingsSaved: "Supabase settings saved",
+    switchedLocal: "Switched to local mode",
+    connected: "Connected",
+    connectFailed: "Connection failed",
+    installHint: "You can also add it to home screen from the browser menu",
+    cleanupDone: "Cleaned {count} records older than 365 days",
+    csvHeaders: ["Tracking Number", "Time", "Scanner", "Status"],
+  },
+  th: {
+    htmlLang: "th",
+    title: "บันทึกสแกนพัสดุ",
+    eyebrow: "PDA + Web",
+    appTitle: "บันทึกสแกนพัสดุ",
+    starting: "กำลังเริ่ม",
+    lanSync: "ซิงก์ LAN",
+    cloudSync: "ซิงก์คลาวด์",
+    localMode: "โหมดในเครื่อง",
+    scanTab: "สแกน",
+    recordsTab: "รายการ",
+    scanEyebrow: "สแกนต่อเนื่อง",
+    scanTitle: "บันทึกจาก PDA",
+    installTitle: "ติดตั้ง",
+    trackingLabel: "เลขพัสดุ",
+    trackingPlaceholder: "สแกนหรือกรอกเลขพัสดุ",
+    operatorLabel: "ผู้สแกน",
+    operatorPlaceholder: "เลือกผู้สแกน",
+    saveButton: "บันทึก",
+    clearButton: "ล้าง",
+    scanHelper: "เมื่อ PDA ใส่ข้อมูลแล้ว ระบบจะบันทึกอัตโนมัติ หากเครื่องส่ง Enter จะบันทึกทันที",
+    todayCount: "วันนี้",
+    totalCount: "ทั้งหมด",
+    duplicateCount: "ซ้ำ",
+    retentionNote: "เก็บเฉพาะข้อมูล 365 วันล่าสุด",
+    noRecords: "ยังไม่มีรายการสแกน",
+    latestPrefix: "ล่าสุด",
+    recordsEyebrow: "เว็บจัดการ",
+    recordsTitle: "ค้นหารายการ",
+    refreshButton: "รีเฟรช",
+    exportButton: "ส่งออก CSV",
+    searchPlaceholder: "ค้นหาเลขพัสดุหรือผู้สแกน",
+    resetButton: "รีเซ็ต",
+    trackingHeader: "เลขพัสดุ",
+    timeHeader: "เวลา",
+    operatorHeader: "ผู้สแกน",
+    statusHeader: "สถานะ",
+    emptyState: "ไม่มีรายการ",
+    ok: "ปกติ",
+    duplicate: "ซ้ำ",
+    settingsTitle: "ตั้งค่าการเชื่อมต่อ",
+    testConnectionButton: "ทดสอบ",
+    saveSettingsButton: "บันทึกตั้งค่า",
+    localModeButton: "ใช้โหมดในเครื่อง",
+    settingsHelper: "การใช้งานทั่วไปไม่ต้องเข้าเมนูตั้งค่า ใช้เมื่อเปลี่ยน Supabase หรือโหมดในเครื่องเท่านั้น",
+    version: "เวอร์ชัน: Cloud v3",
+    scanFirst: "กรุณาสแกนหรือกรอกเลขพัสดุก่อน",
+    chooseOperator: "กรุณาเลือกผู้สแกนก่อน",
+    saved: "บันทึกแล้ว",
+    saveFailed: "บันทึกไม่สำเร็จ",
+    localApiFallback: "ซิงก์ LAN ใช้ไม่ได้ กำลังลองซิงก์คลาวด์",
+    cloudFallback: "ซิงก์คลาวด์ใช้ไม่ได้ แสดงข้อมูลแคช",
+    refreshed: "รีเฟรชแล้ว ทั้งหมด {count} รายการ",
+    settingsMissing: "กรุณากรอก Supabase URL และ Anon Key",
+    settingsSaved: "บันทึกการตั้งค่า Supabase แล้ว",
+    switchedLocal: "เปลี่ยนเป็นโหมดในเครื่องแล้ว",
+    connected: "เชื่อมต่อสำเร็จ",
+    connectFailed: "เชื่อมต่อไม่สำเร็จ",
+    installHint: "สามารถเพิ่มไปยังหน้าจอหลักจากเมนูเบราว์เซอร์ได้",
+    cleanupDone: "ลบข้อมูลเก่ากว่า 365 วันแล้ว {count} รายการ",
+    csvHeaders: ["เลขพัสดุ", "เวลา", "ผู้สแกน", "สถานะ"],
+  },
 };
 
 init();
@@ -57,6 +254,7 @@ async function init() {
   bindEvents();
   loadProfile();
   loadSettingsForm();
+  applyLanguage();
   state.apiAvailable = await detectLocalApi();
   updateStatus();
   await loadRecords();
@@ -108,6 +306,12 @@ function bindEvents() {
   els.useLocalButton.addEventListener("click", useLocalMode);
   els.testConnectionButton.addEventListener("click", testConnection);
   els.installButton.addEventListener("click", installPwa);
+  els.languageSelect.addEventListener("change", () => {
+    state.language = els.languageSelect.value;
+    localStorage.setItem(STORAGE_KEYS.language, state.language);
+    applyLanguage();
+    render();
+  });
 
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
@@ -121,6 +325,32 @@ function bindEvents() {
   }, 4000);
 
   window.setInterval(checkScannerInput, 250);
+}
+
+function t(key, params = {}) {
+  const value = translations[state.language]?.[key] ?? translations.zh[key] ?? key;
+  if (typeof value !== "string") return value;
+  return Object.entries(params).reduce((text, [name, replacement]) => {
+    return text.replace(`{${name}}`, String(replacement));
+  }, value);
+}
+
+function applyLanguage() {
+  const dictionary = translations[state.language] || translations.zh;
+  document.documentElement.lang = dictionary.htmlLang;
+  document.title = dictionary.title;
+  els.languageSelect.value = state.language;
+  document.querySelectorAll("[data-i18n]").forEach((node) => {
+    const key = node.dataset.i18n;
+    node.textContent = t(key);
+  });
+  els.trackingInput.placeholder = t("trackingPlaceholder");
+  els.searchInput.placeholder = t("searchPlaceholder");
+  els.installButton.title = t("installTitle");
+  els.installButton.setAttribute("aria-label", t("installTitle"));
+  els.versionText.textContent = t("version");
+  els.retentionNote.textContent = t("retentionNote");
+  updateStatus();
 }
 
 function setActiveView(viewId) {
@@ -137,13 +367,13 @@ async function saveScan() {
   const operator = els.operatorInput.value.trim();
 
   if (!trackingNumber) {
-    showToast("请先扫描或输入运单号");
+    showToast(t("scanFirst"));
     els.trackingInput.focus();
     return;
   }
 
   if (!operator) {
-    showToast("请先选择扫描人员");
+    showToast(t("chooseOperator"));
     els.operatorInput.focus();
     return;
   }
@@ -179,11 +409,11 @@ async function saveScan() {
     state.records.unshift(record);
     saveLocalRecords();
     render();
-    showToast(duplicate ? `重复运单号：${trackingNumber}` : `已保存：${trackingNumber}`);
+    showToast(duplicate ? `${t("duplicate")}：${trackingNumber}` : `${t("saved")}：${trackingNumber}`);
     els.trackingInput.value = "";
     els.trackingInput.focus();
   } catch (error) {
-    showToast(`保存失败：${error.message}`);
+    showToast(`${t("saveFailed")}：${error.message}`);
   } finally {
     state.isSaving = false;
   }
@@ -231,6 +461,7 @@ function checkScannerInput() {
 }
 
 async function loadRecords() {
+  await cleanupExpiredRecords();
   state.records = loadJson(STORAGE_KEYS.records, []);
   if (state.apiAvailable) {
     try {
@@ -240,7 +471,7 @@ async function loadRecords() {
     } catch (error) {
       state.apiAvailable = false;
       updateStatus();
-      showToast("局域网同步暂不可用，正在尝试云端同步");
+      showToast(t("localApiFallback"));
     }
   }
 
@@ -251,7 +482,7 @@ async function loadRecords() {
     state.records = remoteRecords;
     saveLocalRecords();
   } catch (error) {
-      showToast("云端同步暂不可用，已显示本地缓存");
+    showToast(t("cloudFallback"));
   }
 }
 
@@ -259,8 +490,42 @@ async function refreshRecords(options = {}) {
   await loadRecords();
   render();
   if (!options.silent) {
-    showToast(`已刷新，共 ${state.records.length} 条记录`);
+    showToast(t("refreshed", { count: state.records.length }));
   }
+}
+
+async function cleanupExpiredRecords() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (localStorage.getItem(STORAGE_KEYS.cleanupDate) === today) return;
+
+  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  if (state.apiAvailable) {
+    return;
+  }
+
+  if (isSupabaseMode()) {
+    try {
+      const removed = await supabaseRequest(
+        `/rest/v1/parcel_scans?created_at=lt.${encodeURIComponent(cutoff)}&select=id`,
+        { method: "DELETE", headers: { Prefer: "return=representation" } },
+      );
+      if (removed?.length) {
+        showToast(t("cleanupDone", { count: removed.length }));
+      }
+      localStorage.setItem(STORAGE_KEYS.cleanupDate, today);
+    } catch {
+      // Cleanup is best-effort; lack of delete permission should not block scanning.
+    }
+    return;
+  }
+
+  const localRecords = loadJson(STORAGE_KEYS.records, []);
+  const freshRecords = localRecords.filter((record) => !record.created_at || record.created_at >= cutoff);
+  if (freshRecords.length !== localRecords.length) {
+    localStorage.setItem(STORAGE_KEYS.records, JSON.stringify(freshRecords));
+  }
+  localStorage.setItem(STORAGE_KEYS.cleanupDate, today);
 }
 
 function render() {
@@ -278,8 +543,8 @@ function renderStats() {
 
   const latest = state.records[0];
   els.lastScan.textContent = latest
-    ? `最近：${latest.tracking_number}，${formatDate(latest.created_at)}`
-    : "暂无扫描记录";
+    ? `${t("latestPrefix")}：${latest.tracking_number}，${formatDate(latest.created_at)}`
+    : t("noRecords");
 }
 
 function renderRecords() {
@@ -299,7 +564,7 @@ function renderRecords() {
       <td><strong>${escapeHtml(record.tracking_number)}</strong></td>
       <td>${escapeHtml(formatDate(record.created_at))}</td>
       <td>${escapeHtml(record.operator || "-")}</td>
-      <td><span class="badge ${record.is_duplicate ? "duplicate" : "ok"}">${record.is_duplicate ? "重复" : "正常"}</span></td>
+      <td><span class="badge ${record.is_duplicate ? "duplicate" : "ok"}">${record.is_duplicate ? t("duplicate") : t("ok")}</span></td>
     </tr>
   `,
     )
@@ -308,12 +573,12 @@ function renderRecords() {
 }
 
 function exportCsv() {
-  const header = ["运单号", "时间", "扫描人员", "状态"];
+  const header = t("csvHeaders");
   const rows = state.records.map((record) => [
     record.tracking_number,
     formatDate(record.created_at),
     record.operator || "",
-    record.is_duplicate ? "重复" : "正常",
+    record.is_duplicate ? t("duplicate") : t("ok"),
   ]);
   const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
@@ -329,13 +594,13 @@ function saveSettings() {
   const supabaseUrl = els.supabaseUrlInput.value.trim().replace(/\/$/, "");
   const supabaseKey = els.supabaseKeyInput.value.trim();
   if (!supabaseUrl || !supabaseKey) {
-    showToast("请填写 Supabase URL 和 Anon Key");
+    showToast(t("settingsMissing"));
     return;
   }
   state.settings = { mode: "supabase", supabaseUrl, supabaseKey };
   localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
   updateStatus();
-  showToast("已保存 Supabase 设置");
+  showToast(t("settingsSaved"));
   loadRecords().then(render);
 }
 
@@ -344,7 +609,7 @@ function useLocalMode() {
   localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
   loadSettingsForm();
   updateStatus();
-  showToast("已切换到本地模式");
+  showToast(t("switchedLocal"));
 }
 
 async function testConnection() {
@@ -356,9 +621,9 @@ async function testConnection() {
   };
   try {
     await supabaseRequest("/rest/v1/parcel_scans?select=id&limit=1");
-    showToast("连接成功");
+    showToast(t("connected"));
   } catch (error) {
-    showToast(`连接失败：${error.message}`);
+    showToast(`${t("connectFailed")}：${error.message}`);
   } finally {
     state.settings = previous;
   }
@@ -366,7 +631,7 @@ async function testConnection() {
 
 async function installPwa() {
   if (!state.deferredPrompt) {
-    showToast("浏览器菜单里也可以选择添加到主屏幕");
+    showToast(t("installHint"));
     return;
   }
   state.deferredPrompt.prompt();
@@ -385,10 +650,10 @@ function loadSettingsForm() {
 
 function updateStatus() {
   if (state.apiAvailable) {
-    els.syncStatus.textContent = "局域网同步";
+    els.syncStatus.textContent = t("lanSync");
     return;
   }
-  els.syncStatus.textContent = isSupabaseMode() ? "云端同步" : "本地模式";
+  els.syncStatus.textContent = isSupabaseMode() ? t("cloudSync") : t("localMode");
 }
 
 function isSupabaseMode() {
@@ -459,7 +724,8 @@ function normalizeTrackingNumber(value) {
 
 function formatDate(value) {
   if (!value) return "-";
-  return new Intl.DateTimeFormat("zh-CN", {
+  const locale = { zh: "zh-CN", en: "en-US", th: "th-TH" }[state.language] || "zh-CN";
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

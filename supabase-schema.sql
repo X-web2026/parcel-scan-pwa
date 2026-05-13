@@ -16,6 +16,10 @@ create index if not exists parcel_scans_tracking_number_idx
 
 alter table public.parcel_scans enable row level security;
 
+drop policy if exists "anon can read parcel scans" on public.parcel_scans;
+drop policy if exists "anon can insert parcel scans" on public.parcel_scans;
+drop policy if exists "anon can delete old parcel scans" on public.parcel_scans;
+
 create policy "anon can read parcel scans"
   on public.parcel_scans for select
   using (true);
@@ -23,3 +27,7 @@ create policy "anon can read parcel scans"
 create policy "anon can insert parcel scans"
   on public.parcel_scans for insert
   with check (true);
+
+create policy "anon can delete old parcel scans"
+  on public.parcel_scans for delete
+  using (created_at < now() - interval '365 days');
