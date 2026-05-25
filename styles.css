@@ -366,6 +366,28 @@ select:focus {
   font-weight: 700;
 }
 
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 2px 0 12px;
+  flex-wrap: wrap;
+}
+
+.page-info {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  min-width: 180px;
+  text-align: center;
+}
+
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
@@ -512,5 +534,18 @@ tr:last-child td {
 
   .heading-actions button {
     flex: 1;
+  }
+
+  .pager {
+    justify-content: stretch;
+  }
+
+  .pager .secondary-button {
+    flex: 1;
+  }
+
+  .page-info {
+    order: -1;
+    width: 100%;
   }
 }
