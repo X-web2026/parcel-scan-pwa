@@ -28,6 +28,22 @@ create policy "anon can insert parcel scans"
   on public.parcel_scans for insert
   with check (true);
 
-create policy "anon can delete old parcel scans"
-  on public.parcel_scans for delete
-  using (created_at < now() - interval '365 days');
+create or replace function public.cleanup_old_parcel_scans()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer;
+begin
+  delete from public.parcel_scans
+  where created_at < now() - interval '365 days';
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+grant execute on function public.cleanup_old_parcel_scans() to anon;
+grant execute on function public.cleanup_old_parcel_scans() to authenticated;
