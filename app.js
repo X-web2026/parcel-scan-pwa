@@ -6,6 +6,8 @@ const STORAGE_KEYS = {
   cleanupDate: "parcel-scan-cleanup-date",
 };
 
+const RECORD_PAGE_SIZE = 500;
+const EXPORT_BATCH_SIZE = 1000;
 const RETENTION_DAYS = 365;
 
 const DEFAULT_SUPABASE_SETTINGS = {
@@ -26,6 +28,10 @@ const state = {
   lastSeenScanValue: "",
   stableScanValue: "",
   stableScanTicks: 0,
+  recordPage: 0,
+  hasNextPage: false,
+  totalMatchingRecords: 0,
+  summaryCounts: { today: 0, total: 0, duplicates: 0 },
 };
 
 const els = {
@@ -34,7 +40,6 @@ const els = {
   scanForm: document.querySelector("#scanForm"),
   trackingInput: document.querySelector("#trackingInput"),
   operatorInput: document.querySelector("#operatorInput"),
-  clearScanButton: document.querySelector("#clearScanButton"),
   todayCount: document.querySelector("#todayCount"),
   totalCount: document.querySelector("#totalCount"),
   duplicateCount: document.querySelector("#duplicateCount"),
@@ -45,6 +50,9 @@ const els = {
   refreshButton: document.querySelector("#refreshButton"),
   resetFiltersButton: document.querySelector("#resetFiltersButton"),
   exportButton: document.querySelector("#exportButton"),
+  prevPageButton: document.querySelector("#prevPageButton"),
+  nextPageButton: document.querySelector("#nextPageButton"),
+  pageInfo: document.querySelector("#pageInfo"),
   emptyState: document.querySelector("#emptyState"),
   toast: document.querySelector("#toast"),
   syncStatus: document.querySelector("#syncStatus"),
@@ -55,7 +63,6 @@ const els = {
   testConnectionButton: document.querySelector("#testConnectionButton"),
   installButton: document.querySelector("#installButton"),
   languageSelect: document.querySelector("#languageSelect"),
-  retentionNote: document.querySelector("#retentionNote"),
   versionText: document.querySelector("#versionText"),
 };
 
@@ -79,12 +86,10 @@ const translations = {
     operatorLabel: "扫描人员",
     operatorPlaceholder: "请选择扫描人员",
     saveButton: "保存记录",
-    clearButton: "清空",
     scanHelper: "PDA 扫码头输入后会自动保存；如果设备发送回车，也会立即保存。",
     todayCount: "今日扫描",
     totalCount: "总记录",
     duplicateCount: "重复提醒",
-    retentionNote: "仅保留最近 365 天数据",
     noRecords: "暂无扫描记录",
     latestPrefix: "最近",
     recordsEyebrow: "Web 后台",
@@ -105,21 +110,23 @@ const translations = {
     saveSettingsButton: "保存设置",
     localModeButton: "使用本地模式",
     settingsHelper: "日常使用不需要进入设置；只有更换 Supabase 项目或临时切回本地模式时才需要修改这里。",
-    version: "版本：Cloud v3",
+    version: "版本：Cloud v6",
     scanFirst: "请先扫描或输入运单号",
     chooseOperator: "请先选择扫描人员",
     saved: "已保存",
     saveFailed: "保存失败",
     localApiFallback: "局域网同步暂不可用，正在尝试云端同步",
     cloudFallback: "云端同步暂不可用，已显示本地缓存",
-    refreshed: "已刷新，共 {count} 条记录",
+    refreshed: "已刷新，本页 {count} 条记录",
+    prevPage: "上一页",
+    nextPage: "下一页",
+    pageInfo: "第 {page} / {pages} 页，共 {total} 条",
     settingsMissing: "请填写 Supabase URL 和 Anon Key",
     settingsSaved: "已保存 Supabase 设置",
     switchedLocal: "已切换到本地模式",
     connected: "连接成功",
     connectFailed: "连接失败",
     installHint: "浏览器菜单里也可以选择添加到主屏幕",
-    cleanupDone: "已清理 {count} 条超过 365 天的记录",
     csvHeaders: ["运单号", "时间", "扫描人员", "状态"],
   },
   en: {
@@ -141,12 +148,10 @@ const translations = {
     operatorLabel: "Scanner",
     operatorPlaceholder: "Select scanner",
     saveButton: "Save",
-    clearButton: "Clear",
     scanHelper: "The PDA scanner saves automatically after input. If it sends Enter, it saves immediately.",
     todayCount: "Today",
     totalCount: "Total",
     duplicateCount: "Duplicates",
-    retentionNote: "Only the latest 365 days are kept",
     noRecords: "No scan records yet",
     latestPrefix: "Latest",
     recordsEyebrow: "Web Console",
@@ -167,21 +172,23 @@ const translations = {
     saveSettingsButton: "Save Settings",
     localModeButton: "Use Local Mode",
     settingsHelper: "Daily scanning does not need settings. Change this only when switching Supabase or local mode.",
-    version: "Version: Cloud v3",
+    version: "Version: Cloud v6",
     scanFirst: "Scan or enter a tracking number first",
     chooseOperator: "Select a scanner first",
     saved: "Saved",
     saveFailed: "Save failed",
     localApiFallback: "LAN sync unavailable. Trying cloud sync.",
     cloudFallback: "Cloud sync unavailable. Showing local cache.",
-    refreshed: "Refreshed, {count} records",
+    refreshed: "Refreshed, {count} records on this page",
+    prevPage: "Previous",
+    nextPage: "Next",
+    pageInfo: "Page {page} of {pages}, {total} records",
     settingsMissing: "Enter Supabase URL and Anon Key",
     settingsSaved: "Supabase settings saved",
     switchedLocal: "Switched to local mode",
     connected: "Connected",
     connectFailed: "Connection failed",
     installHint: "You can also add it to home screen from the browser menu",
-    cleanupDone: "Cleaned {count} records older than 365 days",
     csvHeaders: ["Tracking Number", "Time", "Scanner", "Status"],
   },
   th: {
@@ -203,12 +210,10 @@ const translations = {
     operatorLabel: "ผู้สแกน",
     operatorPlaceholder: "เลือกผู้สแกน",
     saveButton: "บันทึก",
-    clearButton: "ล้าง",
     scanHelper: "เมื่อ PDA ใส่ข้อมูลแล้ว ระบบจะบันทึกอัตโนมัติ หากเครื่องส่ง Enter จะบันทึกทันที",
     todayCount: "วันนี้",
     totalCount: "ทั้งหมด",
     duplicateCount: "ซ้ำ",
-    retentionNote: "เก็บเฉพาะข้อมูล 365 วันล่าสุด",
     noRecords: "ยังไม่มีรายการสแกน",
     latestPrefix: "ล่าสุด",
     recordsEyebrow: "เว็บจัดการ",
@@ -229,21 +234,23 @@ const translations = {
     saveSettingsButton: "บันทึกตั้งค่า",
     localModeButton: "ใช้โหมดในเครื่อง",
     settingsHelper: "การใช้งานทั่วไปไม่ต้องเข้าเมนูตั้งค่า ใช้เมื่อเปลี่ยน Supabase หรือโหมดในเครื่องเท่านั้น",
-    version: "เวอร์ชัน: Cloud v3",
+    version: "เวอร์ชัน: Cloud v6",
     scanFirst: "กรุณาสแกนหรือกรอกเลขพัสดุก่อน",
     chooseOperator: "กรุณาเลือกผู้สแกนก่อน",
     saved: "บันทึกแล้ว",
     saveFailed: "บันทึกไม่สำเร็จ",
     localApiFallback: "ซิงก์ LAN ใช้ไม่ได้ กำลังลองซิงก์คลาวด์",
     cloudFallback: "ซิงก์คลาวด์ใช้ไม่ได้ แสดงข้อมูลแคช",
-    refreshed: "รีเฟรชแล้ว ทั้งหมด {count} รายการ",
+    refreshed: "รีเฟรชแล้ว หน้านี้ {count} รายการ",
+    prevPage: "ก่อนหน้า",
+    nextPage: "ถัดไป",
+    pageInfo: "หน้า {page} / {pages}, ทั้งหมด {total} รายการ",
     settingsMissing: "กรุณากรอก Supabase URL และ Anon Key",
     settingsSaved: "บันทึกการตั้งค่า Supabase แล้ว",
     switchedLocal: "เปลี่ยนเป็นโหมดในเครื่องแล้ว",
     connected: "เชื่อมต่อสำเร็จ",
     connectFailed: "เชื่อมต่อไม่สำเร็จ",
     installHint: "สามารถเพิ่มไปยังหน้าจอหลักจากเมนูเบราว์เซอร์ได้",
-    cleanupDone: "ลบข้อมูลเก่ากว่า 365 วันแล้ว {count} รายการ",
     csvHeaders: ["เลขพัสดุ", "เวลา", "ผู้สแกน", "สถานะ"],
   },
 };
@@ -257,6 +264,7 @@ async function init() {
   applyLanguage();
   state.apiAvailable = await detectLocalApi();
   updateStatus();
+  await cleanupExpiredCloudRecords();
   await loadRecords();
   render();
 
@@ -289,17 +297,27 @@ function bindEvents() {
   });
   els.trackingInput.addEventListener("input", scheduleAutoSave);
 
-  els.clearScanButton.addEventListener("click", () => {
-    els.trackingInput.value = "";
-    els.trackingInput.focus();
-  });
-
-  [els.searchInput, els.dateInput].forEach((input) => input.addEventListener("input", renderRecords));
+  const refreshFromFirstPage = debounce(() => {
+    state.recordPage = 0;
+    refreshRecords({ silent: true });
+  }, 300);
+  [els.searchInput, els.dateInput].forEach((input) => input.addEventListener("input", refreshFromFirstPage));
   els.refreshButton.addEventListener("click", refreshRecords);
   els.resetFiltersButton.addEventListener("click", () => {
     els.searchInput.value = "";
     els.dateInput.value = "";
-    renderRecords();
+    state.recordPage = 0;
+    refreshRecords({ silent: true });
+  });
+  els.prevPageButton.addEventListener("click", () => {
+    if (state.recordPage === 0) return;
+    state.recordPage -= 1;
+    refreshRecords({ silent: true });
+  });
+  els.nextPageButton.addEventListener("click", () => {
+    if (!state.hasNextPage) return;
+    state.recordPage += 1;
+    refreshRecords({ silent: true });
   });
   els.exportButton.addEventListener("click", exportCsv);
   els.saveSettingsButton.addEventListener("click", saveSettings);
@@ -349,7 +367,6 @@ function applyLanguage() {
   els.installButton.title = t("installTitle");
   els.installButton.setAttribute("aria-label", t("installTitle"));
   els.versionText.textContent = t("version");
-  els.retentionNote.textContent = t("retentionNote");
   updateStatus();
 }
 
@@ -381,7 +398,7 @@ async function saveScan() {
   state.profile = { operator };
   localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(state.profile));
 
-  const duplicate = state.records.some((record) => normalizeTrackingNumber(record.tracking_number) === trackingNumber);
+  const duplicate = await isDuplicateTrackingNumber(trackingNumber);
   const record = {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
     tracking_number: trackingNumber,
@@ -461,11 +478,17 @@ function checkScannerInput() {
 }
 
 async function loadRecords() {
-  await cleanupExpiredRecords();
   state.records = loadJson(STORAGE_KEYS.records, []);
+  const offset = state.recordPage * RECORD_PAGE_SIZE;
+
   if (state.apiAvailable) {
     try {
-      state.records = await apiRequest("/api/scans");
+      const localRecords = await apiRequest("/api/scans");
+      const filtered = filterRecords(localRecords);
+      state.totalMatchingRecords = filtered.length;
+      state.records = filtered.slice(offset, offset + RECORD_PAGE_SIZE);
+      state.hasNextPage = offset + RECORD_PAGE_SIZE < filtered.length;
+      state.summaryCounts = getSummaryCounts(localRecords);
       saveLocalRecords();
       return;
     } catch (error) {
@@ -475,13 +498,30 @@ async function loadRecords() {
     }
   }
 
-  if (!isSupabaseMode()) return;
+  if (!isSupabaseMode()) {
+    const cachedRecords = loadJson(STORAGE_KEYS.records, []);
+    const filtered = filterRecords(cachedRecords);
+    state.totalMatchingRecords = filtered.length;
+    state.records = filtered.slice(offset, offset + RECORD_PAGE_SIZE);
+    state.hasNextPage = offset + RECORD_PAGE_SIZE < filtered.length;
+    state.summaryCounts = getSummaryCounts(cachedRecords);
+    return;
+  }
 
   try {
-    const remoteRecords = await supabaseRequest("/rest/v1/parcel_scans?select=*&order=created_at.desc&limit=1000");
-    state.records = remoteRecords;
+    const result = await fetchSupabaseRecordsPage({ limit: RECORD_PAGE_SIZE, offset });
+    state.records = result.records;
+    state.totalMatchingRecords = result.total;
+    state.hasNextPage = offset + RECORD_PAGE_SIZE < result.total;
+    await refreshSummaryCounts();
     saveLocalRecords();
   } catch (error) {
+    const cachedRecords = loadJson(STORAGE_KEYS.records, []);
+    const filtered = filterRecords(cachedRecords);
+    state.totalMatchingRecords = filtered.length;
+    state.records = filtered.slice(offset, offset + RECORD_PAGE_SIZE);
+    state.hasNextPage = offset + RECORD_PAGE_SIZE < filtered.length;
+    state.summaryCounts = getSummaryCounts(cachedRecords);
     showToast(t("cloudFallback"));
   }
 }
@@ -494,52 +534,16 @@ async function refreshRecords(options = {}) {
   }
 }
 
-async function cleanupExpiredRecords() {
-  const today = new Date().toISOString().slice(0, 10);
-  if (localStorage.getItem(STORAGE_KEYS.cleanupDate) === today) return;
-
-  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-
-  if (state.apiAvailable) {
-    return;
-  }
-
-  if (isSupabaseMode()) {
-    try {
-      const removed = await supabaseRequest(
-        `/rest/v1/parcel_scans?created_at=lt.${encodeURIComponent(cutoff)}&select=id`,
-        { method: "DELETE", headers: { Prefer: "return=representation" } },
-      );
-      if (removed?.length) {
-        showToast(t("cleanupDone", { count: removed.length }));
-      }
-      localStorage.setItem(STORAGE_KEYS.cleanupDate, today);
-    } catch {
-      // Cleanup is best-effort; lack of delete permission should not block scanning.
-    }
-    return;
-  }
-
-  const localRecords = loadJson(STORAGE_KEYS.records, []);
-  const freshRecords = localRecords.filter((record) => !record.created_at || record.created_at >= cutoff);
-  if (freshRecords.length !== localRecords.length) {
-    localStorage.setItem(STORAGE_KEYS.records, JSON.stringify(freshRecords));
-  }
-  localStorage.setItem(STORAGE_KEYS.cleanupDate, today);
-}
-
 function render() {
   renderStats();
   renderRecords();
+  renderPager();
 }
 
 function renderStats() {
-  const today = new Date().toISOString().slice(0, 10);
-  const todayRecords = state.records.filter((record) => record.created_at?.slice(0, 10) === today);
-  const duplicates = state.records.filter((record) => record.is_duplicate);
-  els.todayCount.textContent = todayRecords.length;
-  els.totalCount.textContent = state.records.length;
-  els.duplicateCount.textContent = duplicates.length;
+  els.todayCount.textContent = state.summaryCounts.today;
+  els.totalCount.textContent = state.summaryCounts.total;
+  els.duplicateCount.textContent = state.summaryCounts.duplicates;
 
   const latest = state.records[0];
   els.lastScan.textContent = latest
@@ -548,14 +552,7 @@ function renderStats() {
 }
 
 function renderRecords() {
-  const keyword = els.searchInput.value.trim().toLowerCase();
-  const date = els.dateInput.value;
-  const records = state.records.filter((record) => {
-    const haystack = [record.tracking_number, record.operator].join(" ").toLowerCase();
-    const matchesKeyword = !keyword || haystack.includes(keyword);
-    const matchesDate = !date || record.created_at?.slice(0, 10) === date;
-    return matchesKeyword && matchesDate;
-  });
+  const records = state.records;
 
   els.recordsBody.innerHTML = records
     .map(
@@ -572,9 +569,10 @@ function renderRecords() {
   els.emptyState.classList.toggle("is-visible", records.length === 0);
 }
 
-function exportCsv() {
+async function exportCsv() {
+  const records = await loadRecordsForExport();
   const header = t("csvHeaders");
-  const rows = state.records.map((record) => [
+  const rows = records.map((record) => [
     record.tracking_number,
     formatDate(record.created_at),
     record.operator || "",
@@ -660,7 +658,189 @@ function isSupabaseMode() {
   return state.settings.mode === "supabase" && state.settings.supabaseUrl && state.settings.supabaseKey;
 }
 
+async function isDuplicateTrackingNumber(trackingNumber) {
+  if (isSupabaseMode()) {
+    try {
+      const params = new URLSearchParams({ select: "id", limit: "1" });
+      params.set("tracking_number", `eq.${trackingNumber}`);
+      params.set("created_at", `gte.${getRetentionCutoffIso()}`);
+      const records = await supabaseRequest(`/rest/v1/parcel_scans?${params.toString()}`);
+      return records.length > 0;
+    } catch {
+      // Fall back to the loaded page if the duplicate check cannot reach the cloud.
+    }
+  }
+  return state.records.some((record) => normalizeTrackingNumber(record.tracking_number) === trackingNumber);
+}
+
+async function fetchSupabaseRecordsPage({ limit, offset }) {
+  const response = await supabaseFetch(buildSupabaseRecordsPath({ limit, offset }), {
+    headers: { Prefer: "count=exact" },
+  });
+  const records = await response.json();
+  return {
+    records,
+    total: parseContentRangeTotal(response.headers.get("content-range"), offset + records.length),
+  };
+}
+
+function buildSupabaseRecordsPath({ limit, offset }) {
+  const params = new URLSearchParams();
+  params.set("select", "*");
+  params.set("order", "created_at.desc");
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  appendFilterParams(params);
+  return `/rest/v1/parcel_scans?${params.toString()}`;
+}
+
+function appendFilterParams(params) {
+  params.append("created_at", `gte.${getRetentionCutoffIso()}`);
+
+  const keyword = cleanSearchKeyword(els.searchInput.value);
+  if (keyword) {
+    params.set("or", `(tracking_number.ilike.*${keyword}*,operator.ilike.*${keyword}*)`);
+  }
+
+  const range = getDateRange(els.dateInput.value);
+  if (range) {
+    params.append("created_at", `gte.${range.start}`);
+    params.append("created_at", `lt.${range.end}`);
+  }
+}
+
+function cleanSearchKeyword(value) {
+  return value.trim().replace(/[*,()]/g, " ").replace(/\s+/g, " ");
+}
+
+function getDateRange(dateValue) {
+  if (!dateValue) return null;
+  const start = new Date(`${dateValue}T00:00:00`);
+  if (Number.isNaN(start.getTime())) return null;
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+async function loadRecordsForExport() {
+  if (state.apiAvailable || !isSupabaseMode()) {
+    return filterRecords(loadJson(STORAGE_KEYS.records, state.records));
+  }
+
+  const records = [];
+  let offset = 0;
+  while (true) {
+    const page = await fetchSupabaseRecordsPage({ limit: EXPORT_BATCH_SIZE, offset });
+    records.push(...page.records);
+    offset += EXPORT_BATCH_SIZE;
+    if (offset >= page.total || page.records.length === 0) break;
+  }
+  return records;
+}
+
+async function refreshSummaryCounts() {
+  const today = new Date();
+  const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const range = getDateRange(todayValue);
+  const [total, todayCount, duplicates] = await Promise.all([
+    fetchSupabaseCount(countParams(() => {})),
+    fetchSupabaseCount(countParams((params) => {
+      params.append("created_at", `gte.${range.start}`);
+      params.append("created_at", `lt.${range.end}`);
+    })),
+    fetchSupabaseCount(countParams((params) => params.set("is_duplicate", "eq.true"))),
+  ]);
+  state.summaryCounts = { today: todayCount, total, duplicates };
+}
+
+function countParams(configure) {
+  const params = new URLSearchParams({ select: "id", limit: "1" });
+  params.append("created_at", `gte.${getRetentionCutoffIso()}`);
+  configure(params);
+  return params;
+}
+
+async function fetchSupabaseCount(params) {
+  const response = await supabaseFetch(`/rest/v1/parcel_scans?${params.toString()}`, {
+    headers: { Prefer: "count=exact" },
+  });
+  return parseContentRangeTotal(response.headers.get("content-range"), 0);
+}
+
+function parseContentRangeTotal(value, fallback) {
+  const total = value?.split("/")[1];
+  const parsed = total && total !== "*" ? Number(total) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getSummaryCounts(records) {
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    today: records.filter((record) => record.created_at?.slice(0, 10) === today).length,
+    total: records.length,
+    duplicates: records.filter((record) => record.is_duplicate).length,
+  };
+}
+
+function filterRecords(records) {
+  const keyword = els.searchInput.value.trim().toLowerCase();
+  const date = els.dateInput.value;
+  const cutoff = getRetentionCutoffIso();
+  return records.filter((record) => {
+    const haystack = [record.tracking_number, record.operator].join(" ").toLowerCase();
+    const matchesKeyword = !keyword || haystack.includes(keyword);
+    const matchesDate = !date || record.created_at?.slice(0, 10) === date;
+    const withinRetention = !record.created_at || record.created_at >= cutoff;
+    return withinRetention && matchesKeyword && matchesDate;
+  });
+}
+
+async function cleanupExpiredCloudRecords() {
+  if (!isSupabaseMode()) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (localStorage.getItem(STORAGE_KEYS.cleanupDate) === today) return;
+
+  try {
+    await supabaseRequest("/rest/v1/rpc/cleanup_old_parcel_scans", {
+      method: "POST",
+      body: "{}",
+    });
+    localStorage.setItem(STORAGE_KEYS.cleanupDate, today);
+  } catch (error) {
+    // The app still filters old records if the DB cleanup function has not been installed yet.
+    console.warn("Cloud cleanup skipped:", error.message);
+  }
+}
+
+function getRetentionCutoffIso() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);
+  return cutoff.toISOString();
+}
+
+function renderPager() {
+  const totalPages = Math.max(1, Math.ceil(state.totalMatchingRecords / RECORD_PAGE_SIZE));
+  const page = Math.min(state.recordPage + 1, totalPages);
+  els.pageInfo.textContent = t("pageInfo", { page, pages: totalPages, total: state.totalMatchingRecords });
+  els.prevPageButton.disabled = state.recordPage === 0;
+  els.nextPageButton.disabled = !state.hasNextPage;
+}
+
+function debounce(fn, delay) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
 async function supabaseRequest(path, options = {}) {
+  const response = await supabaseFetch(path, options);
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+async function supabaseFetch(path, options = {}) {
   const response = await fetch(`${state.settings.supabaseUrl}${path}`, {
     ...options,
     headers: {
@@ -676,8 +856,7 @@ async function supabaseRequest(path, options = {}) {
     throw new Error(text || response.statusText);
   }
 
-  if (response.status === 204) return null;
-  return response.json();
+  return response;
 }
 
 async function detectLocalApi() {
