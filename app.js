@@ -4,6 +4,7 @@ const STORAGE_KEYS = {
   profile: "parcel-scan-profile",
   language: "parcel-scan-language",
   cleanupDate: "parcel-scan-cleanup-date",
+  lastScanStatus: "parcel-scan-last-status",
 };
 
 const RECORD_PAGE_SIZE = 500;
@@ -28,6 +29,7 @@ const state = {
   lastSeenScanValue: "",
   stableScanValue: "",
   stableScanTicks: 0,
+  latestScanStatus: loadJson(STORAGE_KEYS.lastScanStatus, null),
   recordPage: 0,
   hasNextPage: false,
   totalMatchingRecords: 0,
@@ -43,6 +45,10 @@ const els = {
   todayCount: document.querySelector("#todayCount"),
   totalCount: document.querySelector("#totalCount"),
   duplicateCount: document.querySelector("#duplicateCount"),
+  latestScanBanner: document.querySelector("#latestScanBanner"),
+  latestTrackingValue: document.querySelector("#latestTrackingValue"),
+  latestTimeValue: document.querySelector("#latestTimeValue"),
+  latestStatusValue: document.querySelector("#latestStatusValue"),
   lastScan: document.querySelector("#lastScan"),
   recordsBody: document.querySelector("#recordsBody"),
   searchInput: document.querySelector("#searchInput"),
@@ -91,6 +97,14 @@ const translations = {
     totalCount: "总记录",
     duplicateCount: "重复提醒",
     noRecords: "暂无扫描记录",
+    latestScanTitle: "最近扫描",
+    latestTimeLabel: "时间",
+    latestStatusLabel: "状态",
+    latestScanIdle: "等待扫描",
+    scanStatusCloudSaved: "云端已保存",
+    scanStatusLocalSaved: "本地已保存",
+    scanStatusDuplicateSaved: "重复，已保存",
+    scanStatusFailed: "保存失败",
     latestPrefix: "最近",
     recordsEyebrow: "Web 后台",
     recordsTitle: "记录查询",
@@ -110,7 +124,7 @@ const translations = {
     saveSettingsButton: "保存设置",
     localModeButton: "使用本地模式",
     settingsHelper: "日常使用不需要进入设置；只有更换 Supabase 项目或临时切回本地模式时才需要修改这里。",
-    version: "版本：Cloud v8",
+    version: "版本：Cloud v9",
     scanFirst: "请先扫描或输入运单号",
     chooseOperator: "请先选择扫描人员",
     saved: "已保存",
@@ -153,6 +167,14 @@ const translations = {
     totalCount: "Total",
     duplicateCount: "Duplicates",
     noRecords: "No scan records yet",
+    latestScanTitle: "Latest Scan",
+    latestTimeLabel: "Time",
+    latestStatusLabel: "Status",
+    latestScanIdle: "Waiting",
+    scanStatusCloudSaved: "Saved to cloud",
+    scanStatusLocalSaved: "Saved locally",
+    scanStatusDuplicateSaved: "Duplicate saved",
+    scanStatusFailed: "Save failed",
     latestPrefix: "Latest",
     recordsEyebrow: "Web Console",
     recordsTitle: "Record Search",
@@ -172,7 +194,7 @@ const translations = {
     saveSettingsButton: "Save Settings",
     localModeButton: "Use Local Mode",
     settingsHelper: "Daily scanning does not need settings. Change this only when switching Supabase or local mode.",
-    version: "Version: Cloud v8",
+    version: "Version: Cloud v9",
     scanFirst: "Scan or enter a tracking number first",
     chooseOperator: "Select a scanner first",
     saved: "Saved",
@@ -215,6 +237,14 @@ const translations = {
     totalCount: "ทั้งหมด",
     duplicateCount: "ซ้ำ",
     noRecords: "ยังไม่มีรายการสแกน",
+    latestScanTitle: "สแกนล่าสุด",
+    latestTimeLabel: "เวลา",
+    latestStatusLabel: "สถานะ",
+    latestScanIdle: "รอสแกน",
+    scanStatusCloudSaved: "บันทึกขึ้นคลาวด์แล้ว",
+    scanStatusLocalSaved: "บันทึกในเครื่องแล้ว",
+    scanStatusDuplicateSaved: "บันทึกรายการซ้ำแล้ว",
+    scanStatusFailed: "บันทึกไม่สำเร็จ",
     latestPrefix: "ล่าสุด",
     recordsEyebrow: "เว็บจัดการ",
     recordsTitle: "ค้นหารายการ",
@@ -234,7 +264,7 @@ const translations = {
     saveSettingsButton: "บันทึกตั้งค่า",
     localModeButton: "ใช้โหมดในเครื่อง",
     settingsHelper: "การใช้งานทั่วไปไม่ต้องเข้าเมนูตั้งค่า ใช้เมื่อเปลี่ยน Supabase หรือโหมดในเครื่องเท่านั้น",
-    version: "เวอร์ชัน: Cloud v8",
+    version: "เวอร์ชัน: Cloud v9",
     scanFirst: "กรุณาสแกนหรือกรอกเลขพัสดุก่อน",
     chooseOperator: "กรุณาเลือกผู้สแกนก่อน",
     saved: "บันทึกแล้ว",
@@ -367,6 +397,7 @@ function applyLanguage() {
   els.installButton.title = t("installTitle");
   els.installButton.setAttribute("aria-label", t("installTitle"));
   els.versionText.textContent = t("version");
+  renderLatestScanStatus();
   updateStatus();
 }
 
@@ -425,11 +456,18 @@ async function saveScan() {
     }
     state.records.unshift(record);
     saveLocalRecords();
+    setLatestScanStatus(record, duplicate ? "scanStatusDuplicateSaved" : getSavedStatusKey());
+    playFeedbackSound("success");
     render();
     showToast(duplicate ? `${t("duplicate")}：${trackingNumber}` : `${t("saved")}：${trackingNumber}`);
     els.trackingInput.value = "";
     els.trackingInput.focus();
   } catch (error) {
+    setLatestScanStatus(
+      { tracking_number: trackingNumber, created_at: new Date().toISOString() },
+      "scanStatusFailed",
+    );
+    playFeedbackSound("error");
     showToast(`${t("saveFailed")}：${error.message}`);
   } finally {
     state.isSaving = false;
@@ -536,6 +574,7 @@ async function refreshRecords(options = {}) {
 
 function render() {
   renderStats();
+  renderLatestScanStatus();
   renderRecords();
   renderPager();
 }
@@ -549,6 +588,53 @@ function renderStats() {
   els.lastScan.textContent = latest
     ? `${t("latestPrefix")}：${latest.tracking_number}，${formatDate(latest.created_at)}`
     : t("noRecords");
+}
+
+function getSavedStatusKey() {
+  return state.apiAvailable || isSupabaseMode() ? "scanStatusCloudSaved" : "scanStatusLocalSaved";
+}
+
+function setLatestScanStatus(record, statusKey) {
+  state.latestScanStatus = {
+    trackingNumber: record.tracking_number,
+    createdAt: record.created_at || new Date().toISOString(),
+    statusKey,
+  };
+  localStorage.setItem(STORAGE_KEYS.lastScanStatus, JSON.stringify(state.latestScanStatus));
+  renderLatestScanStatus();
+}
+
+function renderLatestScanStatus() {
+  const latestRecord = state.records[0];
+  const latestFromRecord = latestRecord ? {
+    trackingNumber: latestRecord.tracking_number,
+    createdAt: latestRecord.created_at,
+    statusKey: latestRecord.is_duplicate ? "scanStatusDuplicateSaved" : "scanStatusCloudSaved",
+  } : null;
+  const latest = getMoreRecentScanStatus(state.latestScanStatus, latestFromRecord);
+
+  if (!latest) {
+    els.latestScanBanner.classList.remove("is-success", "is-error");
+    els.latestTrackingValue.textContent = "-";
+    els.latestTimeValue.textContent = "-";
+    els.latestStatusValue.textContent = t("latestScanIdle");
+    return;
+  }
+
+  const isError = latest.statusKey === "scanStatusFailed";
+  els.latestScanBanner.classList.toggle("is-success", !isError);
+  els.latestScanBanner.classList.toggle("is-error", isError);
+  els.latestTrackingValue.textContent = latest.trackingNumber || "-";
+  els.latestTimeValue.textContent = formatDate(latest.createdAt);
+  els.latestStatusValue.textContent = t(latest.statusKey);
+}
+
+function getMoreRecentScanStatus(primary, fallback) {
+  if (!primary) return fallback;
+  if (!fallback) return primary;
+  const primaryTime = new Date(primary.createdAt).getTime();
+  const fallbackTime = new Date(fallback.createdAt).getTime();
+  return fallbackTime > primaryTime ? fallback : primary;
 }
 
 function renderRecords() {
@@ -919,6 +1005,47 @@ function showToast(message) {
   els.toast.classList.add("is-visible");
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => els.toast.classList.remove("is-visible"), 2600);
+}
+
+function playFeedbackSound(type) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+
+  try {
+    playFeedbackSound.context ||= new AudioContextClass();
+    const context = playFeedbackSound.context;
+    if (context.state === "suspended") {
+      context.resume();
+    }
+
+    if (type === "error") {
+      playTone(context, 260, 0, 0.18, 0.18);
+      playTone(context, 190, 0.2, 0.2, 0.16);
+      return;
+    }
+
+    playTone(context, 880, 0, 0.08, 0.12);
+    playTone(context, 1180, 0.09, 0.1, 0.11);
+  } catch {
+    // Audio feedback is best-effort; saving must never depend on sound playback.
+  }
+}
+
+function playTone(context, frequency, delay, duration, volume) {
+  const start = context.currentTime + delay;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(frequency, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.03);
 }
 
 function csvCell(value) {
