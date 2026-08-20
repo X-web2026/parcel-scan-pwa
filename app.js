@@ -5,6 +5,7 @@ const STORAGE_KEYS = {
   language: "parcel-scan-language",
   cleanupDate: "parcel-scan-cleanup-date",
   lastScanStatus: "parcel-scan-last-status",
+  pendingRecords: "parcel-scan-pending-records",
 };
 
 const RECORD_PAGE_SIZE = 500;
@@ -30,6 +31,7 @@ const state = {
   stableScanValue: "",
   stableScanTicks: 0,
   latestScanStatus: loadJson(STORAGE_KEYS.lastScanStatus, null),
+  pendingRecords: loadJson(STORAGE_KEYS.pendingRecords, []),
   recordPage: 0,
   hasNextPage: false,
   totalMatchingRecords: 0,
@@ -104,6 +106,11 @@ const translations = {
     scanStatusLocalSaved: "本地已保存",
     scanStatusDuplicateSaved: "重复，已保存",
     scanStatusFailed: "保存失败",
+    scanStatusPendingUpload: "待上传",
+    pendingUpload: "待上传 {count}",
+    pendingSaved: "已保存本机，等待上传",
+    pendingUploaded: "已上传 {count} 条待传记录",
+    pendingUploadFailed: "还有 {count} 条待上传",
     latestPrefix: "最近",
     recordsEyebrow: "Web 后台",
     recordsTitle: "记录查询",
@@ -123,7 +130,7 @@ const translations = {
     saveSettingsButton: "保存设置",
     localModeButton: "使用本地模式",
     settingsHelper: "日常使用不需要进入设置；只有更换 Supabase 项目或临时切回本地模式时才需要修改这里。",
-    version: "版本：Cloud v12",
+    version: "版本：Cloud v13",
     scanFirst: "请先扫描或输入运单号",
     chooseOperator: "请先选择扫描人员",
     saved: "已保存",
@@ -174,6 +181,11 @@ const translations = {
     scanStatusLocalSaved: "Saved locally",
     scanStatusDuplicateSaved: "Duplicate saved",
     scanStatusFailed: "Save failed",
+    scanStatusPendingUpload: "Pending upload",
+    pendingUpload: "Pending {count}",
+    pendingSaved: "Saved on this device, waiting to upload",
+    pendingUploaded: "Uploaded {count} pending records",
+    pendingUploadFailed: "{count} records still pending",
     latestPrefix: "Latest",
     recordsEyebrow: "Web Console",
     recordsTitle: "Record Search",
@@ -193,7 +205,7 @@ const translations = {
     saveSettingsButton: "Save Settings",
     localModeButton: "Use Local Mode",
     settingsHelper: "Daily scanning does not need settings. Change this only when switching Supabase or local mode.",
-    version: "Version: Cloud v12",
+    version: "Version: Cloud v13",
     scanFirst: "Scan or enter a tracking number first",
     chooseOperator: "Select a scanner first",
     saved: "Saved",
@@ -244,6 +256,11 @@ const translations = {
     scanStatusLocalSaved: "บันทึกในเครื่องแล้ว",
     scanStatusDuplicateSaved: "บันทึกรายการซ้ำแล้ว",
     scanStatusFailed: "บันทึกไม่สำเร็จ",
+    scanStatusPendingUpload: "รออัปโหลด",
+    pendingUpload: "รอ {count}",
+    pendingSaved: "บันทึกในเครื่องแล้ว รออัปโหลด",
+    pendingUploaded: "อัปโหลดรายการค้างแล้ว {count} รายการ",
+    pendingUploadFailed: "ยังค้างอัปโหลด {count} รายการ",
     latestPrefix: "ล่าสุด",
     recordsEyebrow: "เว็บจัดการ",
     recordsTitle: "ค้นหารายการ",
@@ -263,7 +280,7 @@ const translations = {
     saveSettingsButton: "บันทึกตั้งค่า",
     localModeButton: "ใช้โหมดในเครื่อง",
     settingsHelper: "การใช้งานทั่วไปไม่ต้องเข้าเมนูตั้งค่า ใช้เมื่อเปลี่ยน Supabase หรือโหมดในเครื่องเท่านั้น",
-    version: "เวอร์ชัน: Cloud v12",
+    version: "เวอร์ชัน: Cloud v13",
     scanFirst: "กรุณาสแกนหรือกรอกเลขพัสดุก่อน",
     chooseOperator: "กรุณาเลือกผู้สแกนก่อน",
     saved: "บันทึกแล้ว",
@@ -454,12 +471,15 @@ async function saveScan() {
     els.trackingInput.value = "";
     els.trackingInput.focus();
   } catch (error) {
-    setLatestScanStatus(
-      { tracking_number: trackingNumber, created_at: new Date().toISOString() },
-      "scanStatusFailed",
-    );
+    state.records.unshift(record);
+    enqueuePendingRecord(record);
+    saveLocalRecords();
+    setLatestScanStatus(record, "scanStatusPendingUpload");
     playFeedbackSound("error");
-    showToast(`${t("saveFailed")}：${error.message}`);
+    render();
+    showToast(`${t("pendingSaved")}：${trackingNumber}`);
+    els.trackingInput.value = "";
+    els.trackingInput.focus();
   } finally {
     state.isSaving = false;
   }
@@ -515,9 +535,9 @@ async function loadRecords() {
       const localRecords = await apiRequest("/api/scans");
       const filtered = filterRecords(localRecords);
       state.totalMatchingRecords = filtered.length;
-      state.records = filtered.slice(offset, offset + RECORD_PAGE_SIZE);
+      state.records = mergePendingRecords(filtered.slice(offset, offset + RECORD_PAGE_SIZE));
       state.hasNextPage = offset + RECORD_PAGE_SIZE < filtered.length;
-      state.summaryCounts = getSummaryCounts(localRecords);
+      state.summaryCounts = addPendingSummaryCounts(getSummaryCounts(localRecords));
       saveLocalRecords();
       return;
     } catch (error) {
@@ -531,26 +551,27 @@ async function loadRecords() {
     const cachedRecords = loadJson(STORAGE_KEYS.records, []);
     const filtered = filterRecords(cachedRecords);
     state.totalMatchingRecords = filtered.length;
-    state.records = filtered.slice(offset, offset + RECORD_PAGE_SIZE);
+    state.records = mergePendingRecords(filtered.slice(offset, offset + RECORD_PAGE_SIZE));
     state.hasNextPage = offset + RECORD_PAGE_SIZE < filtered.length;
-    state.summaryCounts = getSummaryCounts(cachedRecords);
+    state.summaryCounts = addPendingSummaryCounts(getSummaryCounts(cachedRecords));
     return;
   }
 
   try {
     const result = await fetchSupabaseRecordsPage({ limit: RECORD_PAGE_SIZE, offset });
-    state.records = result.records;
-    state.totalMatchingRecords = result.total;
+    state.records = mergePendingRecords(result.records);
+    state.totalMatchingRecords = result.total + filterRecords(state.pendingRecords).length;
     state.hasNextPage = offset + RECORD_PAGE_SIZE < result.total;
     await refreshSummaryCounts();
+    state.summaryCounts = addPendingSummaryCounts(state.summaryCounts);
     saveLocalRecords();
   } catch (error) {
     const cachedRecords = loadJson(STORAGE_KEYS.records, []);
     const filtered = filterRecords(cachedRecords);
     state.totalMatchingRecords = filtered.length;
-    state.records = filtered.slice(offset, offset + RECORD_PAGE_SIZE);
+    state.records = mergePendingRecords(filtered.slice(offset, offset + RECORD_PAGE_SIZE));
     state.hasNextPage = offset + RECORD_PAGE_SIZE < filtered.length;
-    state.summaryCounts = getSummaryCounts(cachedRecords);
+    state.summaryCounts = addPendingSummaryCounts(getSummaryCounts(cachedRecords));
     showToast(t("cloudFallback"));
   }
 }
@@ -568,6 +589,7 @@ function render() {
   renderLatestScanStatus();
   renderRecords();
   renderPager();
+  updateStatus();
 }
 
 function renderStats() {
@@ -583,6 +605,18 @@ function renderStats() {
 
 function getSavedStatusKey() {
   return state.apiAvailable || isSupabaseMode() ? "scanStatusCloudSaved" : "scanStatusLocalSaved";
+}
+
+function enqueuePendingRecord(record) {
+  const alreadyQueued = state.pendingRecords.some((pending) => pending.id === record.id);
+  if (!alreadyQueued) {
+    state.pendingRecords.push(record);
+    savePendingRecords();
+  }
+}
+
+function savePendingRecords() {
+  localStorage.setItem(STORAGE_KEYS.pendingRecords, JSON.stringify(state.pendingRecords));
 }
 
 function setLatestScanStatus(record, statusKey) {
@@ -605,7 +639,7 @@ function renderLatestScanStatus() {
   const latest = getMoreRecentScanStatus(state.latestScanStatus, latestFromRecord);
 
   if (!latest) {
-    els.latestScanBanner.classList.remove("is-success", "is-error");
+    els.latestScanBanner.classList.remove("is-success", "is-error", "is-pending");
     els.latestTrackingValue.textContent = "-";
     els.latestTimeValue.textContent = "-";
     els.latestStatusValue.textContent = t("latestScanIdle");
@@ -613,8 +647,10 @@ function renderLatestScanStatus() {
   }
 
   const isError = latest.statusKey === "scanStatusFailed";
-  els.latestScanBanner.classList.toggle("is-success", !isError);
+  const isPending = latest.statusKey === "scanStatusPendingUpload";
+  els.latestScanBanner.classList.toggle("is-success", !isError && !isPending);
   els.latestScanBanner.classList.toggle("is-error", isError);
+  els.latestScanBanner.classList.toggle("is-pending", isPending);
   els.latestTrackingValue.textContent = latest.trackingNumber || "-";
   els.latestTimeValue.textContent = formatDate(latest.createdAt);
   els.latestStatusValue.textContent = t(latest.statusKey);
@@ -632,18 +668,25 @@ function renderRecords() {
   const records = state.records;
 
   els.recordsBody.innerHTML = records
-    .map(
-      (record) => `
+    .map((record) => {
+      const pending = isPendingRecord(record);
+      const statusClass = pending ? "pending" : record.is_duplicate ? "duplicate" : "ok";
+      const statusText = pending ? t("scanStatusPendingUpload") : record.is_duplicate ? t("duplicate") : t("ok");
+      return `
         <tr>
       <td><strong>${escapeHtml(record.tracking_number)}</strong></td>
       <td>${escapeHtml(formatDate(record.created_at))}</td>
       <td>${escapeHtml(record.operator || "-")}</td>
-      <td><span class="badge ${record.is_duplicate ? "duplicate" : "ok"}">${record.is_duplicate ? t("duplicate") : t("ok")}</span></td>
+      <td><span class="badge ${statusClass}">${statusText}</span></td>
     </tr>
-  `,
-    )
+  `;
+    })
     .join("");
   els.emptyState.classList.toggle("is-visible", records.length === 0);
+}
+
+function isPendingRecord(record) {
+  return state.pendingRecords.some((pending) => pending.id === record.id);
 }
 
 async function exportCsv() {
@@ -714,12 +757,14 @@ function loadSettingsForm() {
 }
 
 function updateStatus() {
+  const pendingCount = state.pendingRecords.length;
+  const suffix = pendingCount > 0 ? ` ${pendingCount}` : "";
   if (state.apiAvailable) {
-    els.syncStatus.textContent = t("lanSync");
+    els.syncStatus.textContent = `${t("lanSync")}${suffix}`;
     els.syncStatus.title = t("refreshButton");
     return;
   }
-  els.syncStatus.textContent = isSupabaseMode() ? t("cloudSync") : t("localMode");
+  els.syncStatus.textContent = `${isSupabaseMode() ? t("cloudSync") : t("localMode")}${suffix}`;
   els.syncStatus.title = t("refreshButton");
 }
 
@@ -729,15 +774,67 @@ async function syncNow() {
     state.apiAvailable = await detectLocalApi();
     updateStatus();
     await cleanupExpiredCloudRecords();
+    const uploaded = await uploadPendingRecords();
     await loadRecords();
     render();
-    showToast(t("refreshed", { count: state.records.length }));
+    showToast(uploaded > 0 ? t("pendingUploaded", { count: uploaded }) : t("refreshed", { count: state.records.length }));
   } catch (error) {
     showToast(`${t("connectFailed")}：${error.message}`);
   } finally {
     els.syncStatus.disabled = false;
     updateStatus();
   }
+}
+
+async function uploadPendingRecords() {
+  if (state.pendingRecords.length === 0) return 0;
+  if (!state.apiAvailable && !isSupabaseMode()) return 0;
+
+  const remaining = [];
+  let uploaded = 0;
+
+  for (const record of state.pendingRecords) {
+    try {
+      await uploadRecord(record);
+      uploaded += 1;
+    } catch (error) {
+      if (isDuplicateIdError(error)) {
+        uploaded += 1;
+      } else {
+        remaining.push(record);
+      }
+    }
+  }
+
+  state.pendingRecords = remaining;
+  savePendingRecords();
+  updateStatus();
+
+  if (remaining.length > 0) {
+    showToast(t("pendingUploadFailed", { count: remaining.length }));
+  }
+
+  return uploaded;
+}
+
+async function uploadRecord(record) {
+  if (state.apiAvailable) {
+    await apiRequest("/api/scans", {
+      method: "POST",
+      body: JSON.stringify(record),
+    });
+    return;
+  }
+
+  await supabaseRequest("/rest/v1/parcel_scans", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(record),
+  });
+}
+
+function isDuplicateIdError(error) {
+  return /duplicate key|23505|already exists/i.test(error.message || "");
 }
 
 function isSupabaseMode() {
@@ -866,6 +963,21 @@ function getSummaryCounts(records) {
     total: records.length,
     duplicates: records.filter((record) => record.is_duplicate).length,
   };
+}
+
+function addPendingSummaryCounts(counts) {
+  const pendingCounts = getSummaryCounts(state.pendingRecords);
+  return {
+    today: counts.today + pendingCounts.today,
+    total: counts.total + pendingCounts.total,
+    duplicates: counts.duplicates + pendingCounts.duplicates,
+  };
+}
+
+function mergePendingRecords(records) {
+  const ids = new Set(records.map((record) => record.id));
+  const pending = filterRecords(state.pendingRecords).filter((record) => !ids.has(record.id));
+  return [...pending, ...records].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
 function filterRecords(records) {
