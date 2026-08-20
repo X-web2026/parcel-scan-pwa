@@ -62,7 +62,7 @@ p {
 .app-shell {
   width: min(1180px, 100%);
   margin: 0 auto;
-  padding: 22px 18px 18px;
+  padding: 14px 18px 16px;
 }
 
 .topbar {
@@ -81,7 +81,7 @@ p {
 
 h1 {
   color: #0d1824;
-  font-size: 29px;
+  font-size: 24px;
   line-height: 1.08;
   font-weight: 850;
   letter-spacing: 0;
@@ -106,12 +106,12 @@ h2 {
 .language-select,
 .status-pill,
 .settings-button {
-  min-height: 42px;
+  min-height: 38px;
 }
 
 .language-select {
   width: auto;
-  min-width: 106px;
+  min-width: 96px;
   border-radius: var(--radius);
   font-size: 13px;
   font-weight: 760;
@@ -120,7 +120,7 @@ h2 {
 }
 
 .status-pill {
-  min-width: 98px;
+  min-width: 90px;
   text-align: center;
   border: 1px solid var(--line);
   color: var(--brand-strong);
@@ -130,6 +130,12 @@ h2 {
   font-size: 13px;
   font-weight: 780;
   box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+
+.status-pill:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .tabs {
@@ -140,7 +146,7 @@ h2 {
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .tab {
@@ -178,8 +184,8 @@ h2 {
   grid-template-columns: minmax(0, 1.4fr) minmax(180px, 0.8fr) minmax(150px, 0.65fr);
   gap: 12px;
   align-items: center;
-  margin-bottom: 16px;
-  padding: 15px 16px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
   color: #22303d;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -227,7 +233,7 @@ h2 {
 
 .scan-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: 1fr;
   gap: 16px;
   align-items: start;
 }
@@ -238,10 +244,6 @@ h2 {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 18px;
-}
-
-.scan-panel {
-  border-color: #cbdce0;
 }
 
 .panel-heading {
@@ -272,18 +274,15 @@ label {
 }
 
 .scan-card {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0)),
-    var(--scan-bg);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #f8fafc;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 14px;
   margin-bottom: 14px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .scan-card .field-label {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--muted);
 }
 
 input,
@@ -335,9 +334,10 @@ select:focus {
 }
 
 .operator-field select {
-  min-height: 58px;
-  font-size: 19px;
-  font-weight: 800;
+  min-height: 44px;
+  background: #fbfcfe;
+  font-size: 15px;
+  font-weight: 780;
 }
 
 .field-grid,
@@ -367,7 +367,6 @@ select:focus {
 
 .primary-button,
 .secondary-button,
-.icon-button,
 .settings-button {
   border-radius: var(--radius);
   min-height: 44px;
@@ -377,8 +376,7 @@ select:focus {
   transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
-.primary-button,
-.icon-button {
+.primary-button {
   border: 1px solid transparent;
 }
 
@@ -413,20 +411,6 @@ select:focus {
   border-color: var(--line-strong);
 }
 
-.icon-button {
-  width: 44px;
-  padding: 0;
-  color: #fff;
-  background: var(--accent);
-  font-size: 26px;
-  line-height: 1;
-  box-shadow: 0 10px 22px rgba(182, 106, 43, 0.2);
-}
-
-.icon-button:hover {
-  background: #9f5720;
-}
-
 .settings-button {
   width: 44px;
   padding: 0;
@@ -456,21 +440,18 @@ button:focus-visible {
   line-height: 1.6;
 }
 
-.stats-panel {
+.records-summary {
   display: grid;
-  gap: 12px;
-  align-content: start;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(220px, 1.2fr);
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .stat {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 17px;
+  padding: 14px;
   box-shadow: var(--shadow-soft);
 }
 
@@ -485,7 +466,7 @@ button:focus-visible {
   display: block;
   margin-top: 8px;
   color: #101926;
-  font-size: 36px;
+  font-size: 28px;
   line-height: 1;
   letter-spacing: 0;
 }
@@ -660,6 +641,7 @@ tr:last-child td {
 
   .scan-layout,
   .latest-scan-banner,
+  .records-summary,
   .field-grid,
   .settings-grid,
   .filters {
@@ -676,8 +658,8 @@ tr:last-child td {
   }
 
   .operator-field select {
-    min-height: 58px;
-    font-size: 19px;
+    min-height: 44px;
+    font-size: 15px;
   }
 
   .actions {
@@ -693,11 +675,6 @@ tr:last-child td {
     display: grid;
     grid-template-columns: 1fr;
     align-items: flex-start;
-  }
-
-  .scan-panel .panel-heading {
-    display: flex;
-    align-items: center;
   }
 
   .heading-actions {
@@ -776,7 +753,7 @@ body {
 
 .topbar {
   margin-bottom: 14px;
-  padding: 16px;
+  padding: 10px 12px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -784,7 +761,7 @@ body {
 }
 
 .topbar h1 {
-  font-size: 30px;
+  font-size: 24px;
 }
 
 .topbar .eyebrow {
@@ -814,7 +791,7 @@ body {
 }
 
 .scan-layout {
-  grid-template-columns: minmax(0, 1.42fr) 320px;
+  grid-template-columns: 1fr;
 }
 
 .panel {
@@ -822,32 +799,12 @@ body {
 }
 
 .scan-panel {
-  overflow: hidden;
-  padding-top: 0;
-}
-
-.scan-panel .panel-heading {
-  margin: 0 -18px 18px;
-  padding: 18px;
-  background:
-    linear-gradient(135deg, rgba(182, 106, 43, 0.16), transparent 38%),
-    linear-gradient(180deg, #163a43 0%, #102d35 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.scan-panel .panel-heading h2 {
-  color: #fff;
-}
-
-.scan-panel .panel-heading .eyebrow {
-  color: rgba(255, 255, 255, 0.72);
+  border-color: #cbdce0;
 }
 
 .scan-card {
   padding: 16px;
-  background:
-    linear-gradient(135deg, rgba(182, 106, 43, 0.12), transparent 42%),
-    #102d35;
+  background: #f8fafc;
 }
 
 .scan-input {
@@ -856,16 +813,8 @@ body {
   font-size: 31px;
 }
 
-.operator-field select {
-  background: #fbfcfe;
-}
-
 .actions .primary-button {
   min-width: 128px;
-}
-
-.stats-panel {
-  gap: 14px;
 }
 
 .stat {
@@ -887,7 +836,7 @@ body {
 }
 
 .stat strong {
-  font-size: 38px;
+  font-size: 28px;
 }
 
 .last-scan {
@@ -933,11 +882,6 @@ td:first-child {
 
   .scan-layout {
     grid-template-columns: 1fr;
-  }
-
-  .scan-panel .panel-heading {
-    margin: 0 -14px 16px;
-    padding: 16px 14px;
   }
 
   .scan-input {

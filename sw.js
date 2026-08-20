@@ -1,10 +1,10 @@
-const CACHE_NAME = "parcel-scan-cloud-v9";
+const CACHE_NAME = "parcel-scan-cloud-v12";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=14",
-  "./app.js?v=14",
-  "./manifest.webmanifest?v=14",
+  "./styles.css?v=17",
+  "./app.js?v=17",
+  "./manifest.webmanifest?v=17",
   "./icon.svg",
 ];
 

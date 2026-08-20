@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
 const RECORD_PAGE_SIZE = 500;
 const EXPORT_BATCH_SIZE = 1000;
 const RETENTION_DAYS = 365;
+const OPERATORS = ["Agate", "Far", "Tam", "Gig"];
 
 const DEFAULT_SUPABASE_SETTINGS = {
   mode: "supabase",
@@ -22,7 +23,6 @@ const state = {
   settings: loadJson(STORAGE_KEYS.settings, DEFAULT_SUPABASE_SETTINGS),
   profile: loadJson(STORAGE_KEYS.profile, { operator: "" }),
   language: localStorage.getItem(STORAGE_KEYS.language) || "zh",
-  deferredPrompt: null,
   apiAvailable: false,
   scanTimer: null,
   isSaving: false,
@@ -67,7 +67,6 @@ const els = {
   saveSettingsButton: document.querySelector("#saveSettingsButton"),
   useLocalButton: document.querySelector("#useLocalButton"),
   testConnectionButton: document.querySelector("#testConnectionButton"),
-  installButton: document.querySelector("#installButton"),
   languageSelect: document.querySelector("#languageSelect"),
   versionText: document.querySelector("#versionText"),
 };
@@ -79,9 +78,9 @@ const translations = {
     eyebrow: "PDA + Web",
     appTitle: "快递扫描记录",
     starting: "启动中",
-    lanSync: "局域网同步",
-    cloudSync: "云端同步",
-    localMode: "本地模式",
+    lanSync: "局域网",
+    cloudSync: "云端",
+    localMode: "本地",
     scanTab: "扫描",
     recordsTab: "记录",
     scanEyebrow: "连续扫描",
@@ -124,7 +123,7 @@ const translations = {
     saveSettingsButton: "保存设置",
     localModeButton: "使用本地模式",
     settingsHelper: "日常使用不需要进入设置；只有更换 Supabase 项目或临时切回本地模式时才需要修改这里。",
-    version: "版本：Cloud v9",
+    version: "版本：Cloud v12",
     scanFirst: "请先扫描或输入运单号",
     chooseOperator: "请先选择扫描人员",
     saved: "已保存",
@@ -149,9 +148,9 @@ const translations = {
     eyebrow: "PDA + Web",
     appTitle: "Parcel Scan Records",
     starting: "Starting",
-    lanSync: "LAN Sync",
-    cloudSync: "Cloud Sync",
-    localMode: "Local Mode",
+    lanSync: "LAN",
+    cloudSync: "Cloud",
+    localMode: "Local",
     scanTab: "Scan",
     recordsTab: "Records",
     scanEyebrow: "Continuous Scan",
@@ -194,7 +193,7 @@ const translations = {
     saveSettingsButton: "Save Settings",
     localModeButton: "Use Local Mode",
     settingsHelper: "Daily scanning does not need settings. Change this only when switching Supabase or local mode.",
-    version: "Version: Cloud v9",
+    version: "Version: Cloud v12",
     scanFirst: "Scan or enter a tracking number first",
     chooseOperator: "Select a scanner first",
     saved: "Saved",
@@ -219,9 +218,9 @@ const translations = {
     eyebrow: "PDA + Web",
     appTitle: "บันทึกสแกนพัสดุ",
     starting: "กำลังเริ่ม",
-    lanSync: "ซิงก์ LAN",
-    cloudSync: "ซิงก์คลาวด์",
-    localMode: "โหมดในเครื่อง",
+    lanSync: "LAN",
+    cloudSync: "คลาวด์",
+    localMode: "ในเครื่อง",
     scanTab: "สแกน",
     recordsTab: "รายการ",
     scanEyebrow: "สแกนต่อเนื่อง",
@@ -264,7 +263,7 @@ const translations = {
     saveSettingsButton: "บันทึกตั้งค่า",
     localModeButton: "ใช้โหมดในเครื่อง",
     settingsHelper: "การใช้งานทั่วไปไม่ต้องเข้าเมนูตั้งค่า ใช้เมื่อเปลี่ยน Supabase หรือโหมดในเครื่องเท่านั้น",
-    version: "เวอร์ชัน: Cloud v9",
+    version: "เวอร์ชัน: Cloud v12",
     scanFirst: "กรุณาสแกนหรือกรอกเลขพัสดุก่อน",
     chooseOperator: "กรุณาเลือกผู้สแกนก่อน",
     saved: "บันทึกแล้ว",
@@ -317,7 +316,6 @@ function bindEvents() {
     event.preventDefault();
     await saveScan();
   });
-
   els.trackingInput.addEventListener("keydown", async (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -353,17 +351,12 @@ function bindEvents() {
   els.saveSettingsButton.addEventListener("click", saveSettings);
   els.useLocalButton.addEventListener("click", useLocalMode);
   els.testConnectionButton.addEventListener("click", testConnection);
-  els.installButton.addEventListener("click", installPwa);
+  els.syncStatus.addEventListener("click", syncNow);
   els.languageSelect.addEventListener("change", () => {
     state.language = els.languageSelect.value;
     localStorage.setItem(STORAGE_KEYS.language, state.language);
     applyLanguage();
     render();
-  });
-
-  window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault();
-    state.deferredPrompt = event;
   });
 
   window.setInterval(() => {
@@ -394,8 +387,6 @@ function applyLanguage() {
   });
   els.trackingInput.placeholder = t("trackingPlaceholder");
   els.searchInput.placeholder = t("searchPlaceholder");
-  els.installButton.title = t("installTitle");
-  els.installButton.setAttribute("aria-label", t("installTitle"));
   els.versionText.textContent = t("version");
   renderLatestScanStatus();
   updateStatus();
@@ -713,18 +704,8 @@ async function testConnection() {
   }
 }
 
-async function installPwa() {
-  if (!state.deferredPrompt) {
-    showToast(t("installHint"));
-    return;
-  }
-  state.deferredPrompt.prompt();
-  await state.deferredPrompt.userChoice;
-  state.deferredPrompt = null;
-}
-
 function loadProfile() {
-  els.operatorInput.value = state.profile.operator || "";
+  els.operatorInput.value = OPERATORS.includes(state.profile.operator) ? state.profile.operator : "";
 }
 
 function loadSettingsForm() {
@@ -735,9 +716,28 @@ function loadSettingsForm() {
 function updateStatus() {
   if (state.apiAvailable) {
     els.syncStatus.textContent = t("lanSync");
+    els.syncStatus.title = t("refreshButton");
     return;
   }
   els.syncStatus.textContent = isSupabaseMode() ? t("cloudSync") : t("localMode");
+  els.syncStatus.title = t("refreshButton");
+}
+
+async function syncNow() {
+  els.syncStatus.disabled = true;
+  try {
+    state.apiAvailable = await detectLocalApi();
+    updateStatus();
+    await cleanupExpiredCloudRecords();
+    await loadRecords();
+    render();
+    showToast(t("refreshed", { count: state.records.length }));
+  } catch (error) {
+    showToast(`${t("connectFailed")}：${error.message}`);
+  } finally {
+    els.syncStatus.disabled = false;
+    updateStatus();
+  }
 }
 
 function isSupabaseMode() {
