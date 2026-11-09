@@ -11,7 +11,7 @@ const STORAGE_KEYS = {
 const RECORD_PAGE_SIZE = 500;
 const EXPORT_BATCH_SIZE = 1000;
 const RETENTION_DAYS = 365;
-const OPERATORS = ["Agate", "Far", "Tam", "Gig"];
+const OPERATORS = ["Agate", "Far", "Tam", "Kat"];
 
 const DEFAULT_SUPABASE_SETTINGS = {
   mode: "supabase",
@@ -130,7 +130,7 @@ const translations = {
     saveSettingsButton: "保存设置",
     localModeButton: "使用本地模式",
     settingsHelper: "日常使用不需要进入设置；只有更换 Supabase 项目或临时切回本地模式时才需要修改这里。",
-    version: "版本：Cloud v13",
+    version: "版本：Cloud v14",
     scanFirst: "请先扫描或输入运单号",
     chooseOperator: "请先选择扫描人员",
     saved: "已保存",
@@ -205,7 +205,7 @@ const translations = {
     saveSettingsButton: "Save Settings",
     localModeButton: "Use Local Mode",
     settingsHelper: "Daily scanning does not need settings. Change this only when switching Supabase or local mode.",
-    version: "Version: Cloud v13",
+    version: "Version: Cloud v14",
     scanFirst: "Scan or enter a tracking number first",
     chooseOperator: "Select a scanner first",
     saved: "Saved",
@@ -280,7 +280,7 @@ const translations = {
     saveSettingsButton: "บันทึกตั้งค่า",
     localModeButton: "ใช้โหมดในเครื่อง",
     settingsHelper: "การใช้งานทั่วไปไม่ต้องเข้าเมนูตั้งค่า ใช้เมื่อเปลี่ยน Supabase หรือโหมดในเครื่องเท่านั้น",
-    version: "เวอร์ชัน: Cloud v13",
+    version: "เวอร์ชัน: Cloud v14",
     scanFirst: "กรุณาสแกนหรือกรอกเลขพัสดุก่อน",
     chooseOperator: "กรุณาเลือกผู้สแกนก่อน",
     saved: "บันทึกแล้ว",
